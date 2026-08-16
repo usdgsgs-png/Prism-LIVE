@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PRISM — live engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080A0F; --panel:#0D1118; --panel2:#11161F; --line:#1A2029; --line2:#232B37;
+  --ink:#C9D1DC; --ink2:#8A94A3; --dim:#5C6672;
+  --structure:#E8EDF4; --pivot:#5B7FC7; --bos:#3FB27F; --choch:#E0A34E;
+  --fib:#4FB0A8; --harmonic:#A97BE0;
+  --long:#3FB27F; --short:#D9585B; --warn:#E0A34E;
+  --candleUp:#5FA88F; --candleDn:#C9686C; --wickUp:#2F5D50; --wickDn:#5E3238;
+  --grid:#12171F; --axis:#4A535F;
+  --mono:'JetBrains Mono', ui-monospace, monospace;
+  --disp:'Chakra Petch', system-ui, sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html,body{height:100%}
+body{background:var(--bg); color:var(--ink); font-family:var(--mono); font-size:12px;
+  line-height:1.45; -webkit-font-smoothing:antialiased; overflow:hidden}
+button,input,select{font:inherit; color:inherit; background:none; border:none}
+button{cursor:pointer}
+button:focus-visible, input:focus-visible, select:focus-visible{outline:1px solid var(--pivot); outline-offset:1px}
+
+.shell{display:grid; grid-template-rows:auto 1fr; height:100dvh}
+.topbar{display:flex; align-items:stretch; border-bottom:1px solid var(--line); background:var(--panel); min-height:44px}
+.brand{display:flex; align-items:baseline; gap:9px; padding:0 16px; border-right:1px solid var(--line)}
+.brand h1{font-family:var(--disp); font-weight:700; font-size:16px; letter-spacing:.22em; color:var(--structure)}
+.brand span{font-size:9px; letter-spacing:.16em; color:var(--dim); text-transform:uppercase}
+.ctl{display:flex; align-items:center; gap:10px; padding:0 14px; border-right:1px solid var(--line)}
+.ctl input.sym{width:110px; background:var(--bg); border:1px solid var(--line2); padding:4px 7px; font-size:12px; letter-spacing:.05em; text-transform:uppercase}
+.tfs{display:flex; gap:1px}
+.tf{padding:3px 8px; font-size:10px; color:var(--dim); border:1px solid transparent}
+.tf:hover{color:var(--ink2)}
+.tf[aria-pressed="true"]{color:var(--structure); border-color:var(--line2); background:var(--panel2)}
+.venues{display:flex; align-items:center; gap:7px; padding:0 14px; border-right:1px solid var(--line)}
+.ven{display:flex; align-items:center; gap:5px; font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim)}
+.ven i{width:5px; height:5px; border-radius:50%; background:var(--dim)}
+.ven.live i{background:var(--long)} .ven.live{color:var(--ink2)}
+.ven.wait i{background:var(--warn)} .ven.fail i{background:var(--short)}
+.ven.off{opacity:.35}
+.ven input{accent-color:var(--pivot)}
+.last{display:flex; align-items:center; gap:10px; padding:0 16px; margin-left:auto; border-left:1px solid var(--line)}
+.last .px{font-size:15px; font-weight:500}
+.last .chg.up{color:var(--long)} .last .chg.dn{color:var(--short)}
+
+.body{display:grid; grid-template-columns:206px 1fr 268px; min-height:0}
+.rail,.side{background:var(--panel); overflow-y:auto; overscroll-behavior:contain}
+.rail{border-right:1px solid var(--line)} .side{border-left:1px solid var(--line)}
+.sect{border-bottom:1px solid var(--line); padding:12px}
+.sect h2{font-family:var(--disp); font-size:9px; font-weight:600; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--dim); margin-bottom:10px}
+
+.auto{font-size:9.5px; color:var(--ink2); line-height:1.65; margin-bottom:8px}
+.linkbtn{font-size:9px; letter-spacing:.11em; color:var(--dim);
+  border-bottom:1px solid var(--line2); padding-bottom:1px; margin-bottom:11px}
+.linkbtn:hover{color:var(--ink)}
+.f{display:grid; gap:4px; margin-bottom:11px}
+.f label{font-size:8.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--dim);
+  display:flex; justify-content:space-between}
+.f label b{color:var(--ink); font-weight:500}
+.f input[type=range]{width:100%; accent-color:var(--pivot); height:16px}
+.hint{font-size:9px; color:var(--dim); line-height:1.6}
+
+.tog{display:flex; align-items:center; gap:8px; width:100%; padding:6px 4px; text-align:left}
+.tog:hover{background:var(--panel2)}
+.tog i{width:9px; height:9px; border:1px solid currentColor}
+.tog[aria-pressed="true"] i{background:currentColor}
+.tog span{font-size:11px; color:var(--ink2)}
+.tog[aria-pressed="true"] span{color:var(--ink)}
+
+.chartwrap{position:relative; min-width:0; background:var(--bg)}
+canvas{display:block; width:100%; height:100%}
+.readout{position:absolute; top:8px; left:10px; display:flex; gap:14px; font-size:10px;
+  color:var(--ink2); pointer-events:none}
+.readout b{color:var(--structure); font-weight:500}
+.status{position:absolute; inset:0; display:grid; place-items:center; background:rgba(8,10,15,.9);
+  font-size:11px; color:var(--ink2); text-align:center; padding:24px; line-height:1.7}
+.status.hide{display:none}
+.status b{display:block; font-family:var(--disp); font-size:13px; letter-spacing:.14em;
+  color:var(--structure); margin-bottom:6px}
+
+.trend{padding:13px 12px; border-bottom:1px solid var(--line); background:var(--panel2)}
+.trend .tname{font-family:var(--disp); font-size:19px; font-weight:700; letter-spacing:.14em}
+.trend .tname.up{color:var(--long)} .trend .tname.dn{color:var(--short)} .trend .tname.rg{color:var(--dim)}
+.trend .tnote{font-size:10px; color:var(--ink2); line-height:1.6; margin-top:7px}
+
+.tbl{width:100%; border-collapse:collapse; font-size:10.5px}
+.tbl th{text-align:left; font-weight:400; font-size:8.5px; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--dim); padding-bottom:6px; border-bottom:1px solid var(--line)}
+.tbl td{padding:5px 0; border-bottom:1px solid var(--line)}
+.tbl td:last-child{text-align:right}
+.lab{font-size:9px; letter-spacing:.06em; padding:1px 4px; border:1px solid currentColor}
+.lab.HH,.lab.HL{color:var(--long)} .lab.LH,.lab.LL{color:var(--short)}
+.ev{font-size:9px; letter-spacing:.08em}
+.ev.BOS{color:var(--bos)} .ev.CHoCH{color:var(--choch)}
+
+.signal{background:var(--panel2)}
+.sighead{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:7px}
+.dir{font-family:var(--disp); font-size:13px; font-weight:700; letter-spacing:.1em}
+.dir.long{color:var(--long)} .dir.short{color:var(--short)} .dir.none{color:var(--dim)}
+.sstat{font-size:8.5px; letter-spacing:.15em; padding:2px 6px; border:1px solid currentColor}
+.sstat.wait{color:var(--dim)} .sstat.armed{color:var(--warn)} .sstat.trig{color:var(--long)}
+.sstat.stopped,.sstat.inv{color:var(--short)}
+.sigwhy{font-size:10px; color:var(--ink2); line-height:1.55; margin-bottom:10px}
+.siggrid{display:grid; grid-template-columns:1fr 1fr; gap:7px 10px; margin-bottom:9px}
+.sg label{display:block; font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim)}
+.sg b{font-size:12px; font-weight:500} .sg b.stp{color:var(--short)}
+.sg em{font-style:normal; font-size:9px; color:var(--dim); margin-left:3px}
+.origin{font-size:9.5px; color:var(--dim); line-height:1.6}
+.origin .dis{display:block; color:var(--warn); margin-top:3px}
+.srcs{display:grid; gap:4px}
+.src{font-size:9.5px; color:var(--ink2); border-left:2px solid currentColor; padding-left:7px}
+.src.long{color:var(--long)} .src.short{color:var(--short)}
+.fields{display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:10px}
+.ff{display:grid; gap:3px}
+.ff label{font-size:8px; letter-spacing:.13em; text-transform:uppercase; color:var(--dim)}
+.ff input{background:var(--bg); border:1px solid var(--line2); color:var(--ink);
+  font-family:var(--mono); font-size:11.5px; padding:5px 7px; width:100%}
+.out{display:grid; font-size:10.5px}
+.row{display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid var(--line)}
+.row span{color:var(--ink2)} .row b{font-weight:500}
+.row.hi b{color:var(--structure); font-size:12px}
+.alarm{margin-top:9px; padding:8px 9px; font-size:10px; line-height:1.55;
+  border:1px solid var(--short); color:var(--short); display:none}
+.alarm.on{display:block}
+.alarm.safe{border-color:var(--line2); color:var(--dim); display:block}
+.lg{display:grid; grid-template-columns:auto auto 1fr; gap:3px 8px; align-items:baseline;
+  padding:6px 0; border-bottom:1px solid var(--line)}
+.lg.moved{border-left:2px solid var(--short); padding-left:6px}
+.lgt{font-size:9px; color:var(--dim)}
+.lgd{font-size:9px; letter-spacing:.1em}
+.lgd.long{color:var(--long)} .lgd.short{color:var(--short)}
+.lgv{font-size:10px; text-align:right}
+.lgi{grid-column:1/-1; font-size:9px; color:var(--dim); line-height:1.5}
+
+.sig{background:var(--panel2)}
+.signame{font-family:var(--disp); font-size:14px; font-weight:700; letter-spacing:.1em; margin-bottom:6px}
+.signame.long{color:var(--long)} .signame.short{color:var(--short)} .signame.none{color:var(--dim)}
+.badge{font-family:var(--mono); font-size:8px; letter-spacing:.14em; padding:2px 5px; border:1px solid currentColor; margin-left:6px; vertical-align:middle}
+.badge.waiting{color:var(--dim)} .badge.armed{color:var(--warn)}
+.badge.triggered{color:var(--long)} .badge.stopped,.badge.invalidated{color:var(--short)}
+.sigwhy{font-size:10px; color:var(--ink2); line-height:1.55; margin-bottom:9px}
+.siggrid{display:grid; grid-template-columns:1fr 1fr; gap:7px 10px; margin-bottom:9px}
+.siggrid label{display:block; font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim)}
+.siggrid b{font-size:12px; font-weight:500}
+.siggrid b.s{color:var(--short)}
+.siggrid em{font-style:normal; font-size:9px; color:var(--dim)}
+.sigsrc{font-size:9px; color:var(--dim); line-height:1.6}
+.sigsrc .dis{display:block; color:var(--warn); margin-top:3px}
+.sigsrc .alt{display:block; margin-top:3px; color:var(--ink2)}
+.sigsrc .inv{display:block; margin-top:3px}
+.logbtn{margin-top:9px; width:100%; padding:6px; font-size:9.5px; letter-spacing:.12em;
+  border:1px solid var(--line2); color:var(--ink2)}
+.logbtn:hover:not(:disabled){color:var(--ink); border-color:var(--ink2)}
+.logbtn:disabled{opacity:.5; cursor:default}
+.mini{font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); display:flex; align-items:center; gap:5px}
+.mini input{width:62px; background:var(--bg); border:1px solid var(--line2); padding:3px 5px; font-size:11px; color:var(--ink)}
+.lg{display:grid; grid-template-columns:auto auto auto; gap:2px 8px; align-items:baseline;
+  padding:5px 0; border-bottom:1px solid var(--line)}
+.lgs{font-size:10px; font-weight:500}
+.lgd{font-size:8.5px; letter-spacing:.1em}
+.lgd.long{color:var(--long)} .lgd.short{color:var(--short)}
+.lgr{margin-left:auto; font-size:10px}
+.lgr.pos{color:var(--long)} .lgr.neg{color:var(--short)} .lgr.na{color:var(--dim)}
+.lgi{grid-column:1/-1; font-size:8.5px; color:var(--dim); line-height:1.5}
+
+.pat{display:grid; grid-template-columns:auto auto auto; gap:3px 8px; align-items:baseline;
+  padding:6px 0; border-bottom:1px solid var(--line)}
+.pat.forming{opacity:.82}
+.pn{font-size:11px; font-weight:500; color:var(--harmonic)}
+.pd{font-size:8.5px; letter-spacing:.1em}
+.pd.long{color:var(--long)} .pd.short{color:var(--short)}
+.ps{margin-left:auto; font-size:10px; color:var(--ink2)}
+.pi{grid-column:1/-1; font-size:9px; color:var(--dim); line-height:1.5}
+
+@media (max-width:1080px){ .body{grid-template-columns:180px 1fr 240px} }
+@media (max-width:860px){
+  body{overflow:auto} .shell{height:auto}
+  .body{grid-template-columns:1fr; grid-template-rows:auto 62vh auto}
+  .rail{border-right:none; border-bottom:1px solid var(--line)}
+  .side{border-left:none; border-top:1px solid var(--line)}
+  .topbar{flex-wrap:wrap} .last{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><h1>PRISM</h1><span>live engine</span></div>
+    <div class="ctl">
+      <input class="sym" id="sym" value="BTCUSDT" spellcheck="false" aria-label="Symbol">
+      <div class="tfs" role="group" aria-label="Timeframe">
+        <button class="tf" data-tf="15m">15m</button>
+        <button class="tf" data-tf="1h" aria-pressed="true">1H</button>
+        <button class="tf" data-tf="4h">4H</button>
+        <button class="tf" data-tf="1d">1D</button>
+      </div>
+    </div>
+    <div class="venues" id="venues"></div>
+    <div class="ctl">
+      <label class="mini">Acct <input id="acct" type="number" value="1000" step="100"></label>
+      <label class="mini">Risk% <input id="riskPct" type="number" value="2" step="0.25"></label>
+    </div>
+    <div class="last"><div class="px" id="lastPx">—</div><div class="chg" id="lastChg"></div></div>
+  </header>
+
+  <div class="body">
+    <aside class="rail">
+      <div class="sect">
+        <h2>Pivot engine</h2>
+        <p class="auto" id="autoWhy">Calibrating…</p>
+        <button class="linkbtn" id="manualToggle">Adjust manually</button>
+        <div id="manualBox" hidden>
+          <div class="f">
+            <label>Fractal strength <b id="vStrength">3</b></label>
+            <input type="range" id="strength" min="1" max="12" value="3">
+          </div>
+          <div class="f">
+            <label>Noise filter <b id="vAtr">1.0× ATR</b></label>
+            <input type="range" id="atrMult" min="0" max="40" value="10" step="1">
+          </div>
+          <div class="f">
+            <label>Pattern min score <b id="vScore">50%</b></label>
+            <input type="range" id="minScore" min="30" max="95" value="50">
+          </div>
+          <p class="hint">Strength is how many bars either side a pivot must beat. The filter drops swings smaller than that multiple of ATR.</p>
+        </div>
+      </div>
+      <div class="sect">
+        <h2>Schools voting</h2>
+        <button class="tog" data-school="structure" aria-pressed="true" style="color:var(--structure)"><i></i><span>Structure</span></button>
+        <button class="tog" data-school="harmonic" aria-pressed="true" style="color:var(--harmonic)"><i></i><span>Harmonic</span></button>
+        <button class="tog" data-school="fib" aria-pressed="true" style="color:var(--fib)"><i></i><span>Fibonacci</span></button>
+        <p class="hint">Only these produce an entry. Turn one off and the signal is rebuilt without it.</p>
+      </div>
+
+      <div class="sect">
+        <h2>Draw</h2>
+        <button class="tog" id="tPivots" aria-pressed="true" style="color:var(--pivot)"><i></i><span>Pivots</span></button>
+        <button class="tog" id="tLabels" aria-pressed="true" style="color:var(--structure)"><i></i><span>HH / HL / LH / LL</span></button>
+        <button class="tog" id="tEvents" aria-pressed="true" style="color:var(--bos)"><i></i><span>BOS / CHoCH</span></button>
+        <button class="tog" id="tZig" aria-pressed="false" style="color:var(--ink2)"><i></i><span>Zigzag</span></button>
+        <button class="tog" id="tFib" aria-pressed="true" style="color:var(--fib)"><i></i><span>Fib clusters</span></button>
+        <button class="tog" id="tHarm" aria-pressed="true" style="color:var(--harmonic)"><i></i><span>Harmonics</span></button>
+      </div>
+      <div class="sect">
+        <h2>Schools that vote</h2>
+        <button class="tog sch" data-s="harmonic" aria-pressed="true" style="color:var(--harmonic)"><i></i><span>Harmonic</span></button>
+        <button class="tog sch" data-s="structure" aria-pressed="true" style="color:var(--structure)"><i></i><span>Structure</span></button>
+        <button class="tog sch" data-s="fib" aria-pressed="true" style="color:var(--fib)"><i></i><span>Fibonacci</span></button>
+        <p class="hint">Only these decide the entry. Everything else on the chart is context.</p>
+      </div>
+      <div class="sect">
+        <h2>Aggregation</h2>
+        <p class="hint" id="aggNote">—</p>
+      </div>
+    </aside>
+
+    <main class="chartwrap">
+      <canvas id="cv"></canvas>
+      <div class="readout" id="readout"></div>
+      <div class="status" id="statusBox"><div><b>Connecting</b><span id="statusMsg">Loading history…</span></div></div>
+    </main>
+
+    <aside class="side">
+      <div class="sect signal" id="signal"></div>
+
+      <div class="sect sig" id="signal"></div>
+
+      <div class="trend">
+        <div class="tname rg" id="trendName">—</div>
+        <p class="tnote" id="trendNote"></p>
+      </div>
+      <div class="sect">
+        <h2>Structure events</h2>
+        <table class="tbl"><tbody id="events"></tbody></table>
+      </div>
+      <div class="sect">
+        <h2>Size it</h2>
+        <div class="fields">
+          <div class="ff"><label for="acct">Account</label><input id="acct" type="number" value="1000" step="50"></div>
+          <div class="ff"><label for="risk">Risk %</label><input id="risk" type="number" value="2" step="0.25"></div>
+          <div class="ff"><label for="lev">Leverage ×</label><input id="lev" type="number" value="20" step="1"></div>
+          <div class="ff"><label for="taker">Fee bp</label><input id="taker" type="number" value="5.5" step="0.5"></div>
+        </div>
+        <div class="out" id="riskOut"></div>
+        <div class="alarm" id="alarm"></div>
+      </div>
+
+      <div class="sect">
+        <h2>Signal log <button class="linkbtn" id="expLog" style="float:right;margin:0">Export</button></h2>
+        <div id="log"></div>
+      </div>
+
+      <div class="sect">
+        <h2>Signal log</h2>
+        <div class="out" id="logStats"></div>
+        <div id="logRows"></div>
+        <p class="hint" id="logNote"></p>
+        <button class="linkbtn" id="exportLog">Export as JSON</button>
+      </div>
+
+      <div class="sect">
+        <h2>Patterns</h2>
+        <div id="patterns"></div>
+      </div>
+      <div class="sect">
+        <h2>Swings</h2>
+        <table class="tbl">
+          <thead><tr><th>Type</th><th>Price</th><th>Time</th></tr></thead>
+          <tbody id="swings"></tbody>
+        </table>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   PRISM live engine
+   Browser only. History over REST, updates over WebSocket,
+   straight from each exchange. Nothing is proxied and nothing
+   is stored off this device.
+   ============================================================ */
+
+const TF = {
+  '15m':{ms:900000,   binance:'15m', bybit:'15'},
+  '1h' :{ms:3600000,  binance:'1h',  bybit:'60'},
+  '4h' :{ms:14400000, binance:'4h',  bybit:'240'},
+  '1d' :{ms:86400000, binance:'1d',  bybit:'D'}
+};
+const HISTORY = 500;
+
+/* ---------- venue adapters ----------
+   Each venue only has to know how to fetch its own history,
+   open its own socket, and normalise a bar. Adding OKX or
+   Bitget later means one more entry here and nothing else. */
+const VENUES = {
+  binance:{
+    name:'Binance', on:true, state:'idle', bars:new Map(), ws:null,
+    sym: s => s.toUpperCase(),
+    history(sym, tf){
+      const u = `https://fapi.binance.com/fapi/v1/klines?symbol=${this.sym(sym)}&interval=${TF[tf].binance}&limit=${HISTORY}`;
+      return fetch(u).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(rows => rows.map(k=>({
+          t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], closed:true
+        })));
+    },
+    socket(sym, tf, onBar){
+      const ws = new WebSocket(`wss://fstream.binance.com/ws/${sym.toLowerCase()}@kline_${TF[tf].binance}`);
+      ws.onmessage = e => {
+        const k = JSON.parse(e.data).k; if(!k) return;
+        onBar({t:+k.t, o:+k.o, h:+k.h, l:+k.l, c:+k.c, v:+k.v, closed:!!k.x});
+      };
+      return ws;
+    }
+  },
+  bybit:{
+    name:'Bybit', on:true, state:'idle', bars:new Map(), ws:null,
+    sym: s => s.toUpperCase(),
+    history(sym, tf){
+      const u = `https://api.bybit.com/v5/market/kline?category=linear&symbol=${this.sym(sym)}&interval=${TF[tf].bybit}&limit=${HISTORY}`;
+      return fetch(u).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(j=>{
+          if(j.retCode !== 0) throw new Error(j.retMsg || 'bybit error');
+          return j.result.list.map(k=>({
+            t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], closed:true
+          })).reverse();
+        });
+    },
+    socket(sym, tf, onBar){
+      const ws = new WebSocket('wss://stream.bybit.com/v5/public/linear');
+      ws.onopen = ()=> ws.send(JSON.stringify({op:'subscribe', args:[`kline.${TF[tf].bybit}.${this.sym(sym)}`]}));
+      ws.onmessage = e => {
+        const m = JSON.parse(e.data); if(!m.data) return;
+        m.data.forEach(k => onBar({
+          t:+k.start, o:+k.open, h:+k.high, l:+k.low, c:+k.close, v:+k.volume, closed:!!k.confirm
+        }));
+      };
+      return ws;
+    }
+  }
+};
+
+let SYM='BTCUSDT', TFK='1h', candles=[], pivots=[], events=[], trend={name:'range'};
+let autoMode=true, cal=null, plans={}, signal={kind:'none'};
+const schools={structure:true, harmonic:true, fib:true};
+const schoolOn={harmonic:true, structure:true, fib:true};
+
+/* ---------- aggregation ----------
+   Volume-weighted across whichever venues answered. A bucket
+   missing from one venue is not invented — it is simply built
+   from the venues that have it, and the count is reported. */
+function aggregate(){
+  const buckets = new Map();
+  for(const key in VENUES){
+    const V = VENUES[key];
+    if(!V.on) continue;
+    V.bars.forEach((b,t)=>{
+      let g = buckets.get(t);
+      if(!g){ g = {t, o:0,h:-Infinity,l:Infinity,c:0, v:0, wo:0, wc:0, n:0, closed:true}; buckets.set(t,g); }
+      const w = b.v > 0 ? b.v : 1e-9;
+      g.wo += b.o*w; g.wc += b.c*w; g.v += b.v;
+      g.h = Math.max(g.h, b.h); g.l = Math.min(g.l, b.l);
+      g.n++; g.closed = g.closed && b.closed;
+    });
+  }
+  const out = [...buckets.values()].sort((a,b)=>a.t-b.t).map(g=>{
+    const w = g.v > 0 ? g.v : g.n*1e-9;
+    return {t:g.t, o:g.wo/w, h:g.h, l:g.l, c:g.wc/w, v:g.v, n:g.n, closed:g.closed};
+  });
+  return out.slice(-HISTORY);
+}
+
+/* ---------- ATR, for the noise filter ---------- */
+function atr(bars, period=14){
+  if(bars.length < 2) return 0;
+  const tr=[];
+  for(let i=1;i<bars.length;i++){
+    const b=bars[i], p=bars[i-1];
+    tr.push(Math.max(b.h-b.l, Math.abs(b.h-p.c), Math.abs(b.l-p.c)));
+  }
+  const slice = tr.slice(-period);
+  return slice.reduce((a,x)=>a+x,0)/slice.length;
+}
+
+/* ============================================================
+   PIVOT ENGINE
+   Fractals first, then two clean-up passes: collapse runs of
+   the same type down to the extreme one, and drop swings that
+   are too small to mean anything at this volatility.
+   ============================================================ */
+function findPivots(bars, strength, atrMult){
+  const raw=[];
+  for(let i=strength; i<bars.length-strength; i++){
+    let hi=true, lo=true;
+    for(let k=1;k<=strength;k++){
+      if(bars[i].h <= bars[i-k].h || bars[i].h <= bars[i+k].h) hi=false;
+      if(bars[i].l >= bars[i-k].l || bars[i].l >= bars[i+k].l) lo=false;
+      if(!hi && !lo) break;
+    }
+    if(hi) raw.push({i, t:bars[i].t, p:bars[i].h, kind:'H'});
+    if(lo) raw.push({i, t:bars[i].t, p:bars[i].l, kind:'L'});
+  }
+  raw.sort((a,b)=>a.i-b.i || (a.kind==='H'?-1:1));
+
+  // collapse consecutive same-kind pivots to the extreme
+  const alt=[];
+  for(const p of raw){
+    const last = alt[alt.length-1];
+    if(last && last.kind===p.kind){
+      if((p.kind==='H' && p.p > last.p) || (p.kind==='L' && p.p < last.p)) alt[alt.length-1]=p;
+    } else alt.push(p);
+  }
+
+  // drop swings smaller than the volatility floor, without ever
+  // leaving two pivots of the same kind next to each other
+  const floor = atr(bars) * atrMult;
+  if(floor <= 0) return alt;
+  const keep=[];
+  for(const p of alt){
+    const prev = keep[keep.length-1];
+    if(!prev){ keep.push(p); continue; }
+    if(p.kind === prev.kind){
+      // the pivot between them was filtered out — merge into the extreme
+      if((p.kind==='H' && p.p > prev.p) || (p.kind==='L' && p.p < prev.p)) keep[keep.length-1]=p;
+      continue;
+    }
+    if(Math.abs(p.p - prev.p) >= floor) keep.push(p);
+    // otherwise the swing is noise: drop it and keep looking
+  }
+  return keep;
+}
+
+/* ---------- label the swings and read the structure ---------- */
+function labelSwings(pv){
+  let lastH=null, lastL=null;
+  pv.forEach(p=>{
+    if(p.kind==='H'){ p.label = lastH==null ? 'H' : (p.p > lastH ? 'HH' : 'LH'); lastH = p.p; }
+    else            { p.label = lastL==null ? 'L' : (p.p > lastL ? 'HL' : 'LL'); lastL = p.p; }
+  });
+  return pv;
+}
+
+function readStructure(bars, pv){
+  const ev=[];
+  let dir = 'range';           // running state as we walk forward
+  let refH = null, refL = null;
+
+  for(const p of pv){
+    if(p.kind==='H'){
+      if(dir==='down' && p.label==='HH'){ ev.push({t:p.t, type:'CHoCH', to:'up', p:p.p}); dir='up'; }
+      else if(dir==='up' && p.label==='HH') ev.push({t:p.t, type:'BOS', to:'up', p:p.p});
+      else if(dir==='range' && p.label==='HH'){ ev.push({t:p.t, type:'BOS', to:'up', p:p.p}); dir='up'; }
+      refH = p.p;
+    } else {
+      if(dir==='up' && p.label==='LL'){ ev.push({t:p.t, type:'CHoCH', to:'down', p:p.p}); dir='down'; }
+      else if(dir==='down' && p.label==='LL') ev.push({t:p.t, type:'BOS', to:'down', p:p.p});
+      else if(dir==='range' && p.label==='LL'){ ev.push({t:p.t, type:'BOS', to:'down', p:p.p}); dir='down'; }
+      refL = p.p;
+    }
+  }
+
+  const px = bars.length ? bars[bars.length-1].c : 0;
+  const note = dir==='up'
+    ? `Higher highs and higher lows. Structure breaks if price closes below ${refL ? fmt(refL) : 'the last higher low'}.`
+    : dir==='down'
+    ? `Lower highs and lower lows. Structure breaks if price closes above ${refH ? fmt(refH) : 'the last lower high'}.`
+    : 'No clean sequence of higher or lower swings yet. Not enough pivots, or the filter is set too wide.';
+
+  return {trend:{name:dir, refH, refL, note, px}, events:ev.slice(-14).reverse()};
+}
+
+/* ============================================================
+   HARMONIC SCANNER
+   Ratio tables are the classic definitions. A window of five
+   pivots is scored on how close each leg sits to the ideal;
+   the tolerance band decides membership, the score decides
+   whether it is worth showing.
+   ============================================================ */
+const PATTERNS = {
+  Gartley:   {AB:[.55,.68,.618],  BC:[.382,.886,.618], CD:[1.13,1.618,1.272], AD:[.75,.82,.786]},
+  Bat:       {AB:[.382,.5,.45],   BC:[.382,.886,.618], CD:[1.618,2.618,2.0],  AD:[.85,.92,.886]},
+  Butterfly: {AB:[.75,.82,.786],  BC:[.382,.886,.618], CD:[1.618,2.618,2.0],  AD:[1.20,1.68,1.272]},
+  Crab:      {AB:[.382,.618,.5],  BC:[.382,.886,.618], CD:[2.24,3.618,3.14],  AD:[1.55,1.72,1.618]},
+  Shark:     {AB:[.446,.618,.5],  BC:[1.13,1.618,1.3], CD:[1.27,2.24,1.618],  AD:[.85,1.13,.886]},
+  Cypher:    {AB:[.382,.618,.5],  BC:[1.13,1.414,1.27],CD:[1.272,2.0,1.618],  AD:[.75,.82,.786]}
+};
+
+const ratio = (a,b) => Math.abs(b) < 1e-12 ? 0 : Math.abs(a/b);
+function legScore(v,[lo,hi,ideal]){
+  if(v < lo || v > hi) return null;                 // outside the band, not this pattern
+  const span = Math.max(ideal-lo, hi-ideal) || 1;
+  return 1 - Math.min(1, Math.abs(v-ideal)/span);   // 1 = dead on the ideal
+}
+
+/* Score one XABCD window. Returns null unless every leg is in band. */
+function matchXABCD(X,A,B,C,D){
+  const XA=A.p-X.p, AB=B.p-A.p, BC=C.p-B.p, CD=D.p-C.p, AD=D.p-A.p;
+  // legs must alternate direction, and D must be on A's side of the move
+  if(Math.sign(XA)===Math.sign(AB) || Math.sign(AB)===Math.sign(BC) || Math.sign(BC)===Math.sign(CD)) return null;
+  const r = {AB:ratio(AB,XA), BC:ratio(BC,AB), CD:ratio(CD,BC), AD:ratio(AD,XA)};
+  const out=[];
+  for(const name in PATTERNS){
+    const P=PATTERNS[name];
+    const s=['AB','BC','CD','AD'].map(k=>legScore(r[k],P[k]));
+    if(s.some(v=>v===null)) continue;
+    out.push({name, score:s.reduce((a,b)=>a+b,0)/4, ratios:r,
+      // X low → A high → CD falls into D: you buy at D. And the mirror.
+      dir: XA>0 ? 'long' : 'short'});
+  }
+  return out.length ? out.sort((a,b)=>b.score-a.score)[0] : null;
+}
+
+/* A forming pattern: X A B C are printed, D is projected from AD. */
+function projectD(X,A,B,C){
+  const XA=A.p-X.p, AB=B.p-A.p, BC=C.p-B.p;
+  if(Math.sign(XA)===Math.sign(AB) || Math.sign(AB)===Math.sign(BC)) return [];
+  const rAB=ratio(AB,XA), rBC=ratio(BC,AB);
+  const out=[];
+  for(const name in PATTERNS){
+    const P=PATTERNS[name];
+    const sAB=legScore(rAB,P.AB), sBC=legScore(rBC,P.BC);
+    if(sAB===null || sBC===null) continue;
+    const Dp = A.p - XA*P.AD[2];
+    const lo = A.p - XA*P.AD[1], hi = A.p - XA*P.AD[0];
+    out.push({name, score:(sAB+sBC)/2, D:Dp, przLo:Math.min(lo,hi), przHi:Math.max(lo,hi),
+      dir: XA>0 ? 'long' : 'short', forming:true});
+  }
+  return out.sort((a,b)=>b.score-a.score).slice(0,3);
+}
+
+function scanHarmonics(pv, minScore=0.5){
+  const found=[];
+  for(let i=0;i+4<pv.length;i++){
+    const [X,A,B,C,D]=pv.slice(i,i+5);
+    const m=matchXABCD(X,A,B,C,D);
+    if(m && m.score>=minScore) found.push({...m, X,A,B,C,D, complete:true, endIdx:D.i});
+  }
+  // the newest four pivots may be an unfinished pattern
+  if(pv.length>=4){
+    const [X,A,B,C]=pv.slice(-4);
+    projectD(X,A,B,C).filter(p=>p.score>=minScore).forEach(p=>found.push({...p, X,A,B,C, complete:false, endIdx:C.i}));
+  }
+  return found.sort((a,b)=>b.endIdx-a.endIdx || b.score-a.score).slice(0,6);
+}
+
+/* ============================================================
+   FIB
+   Drawn off the dominant recent leg, then levels from several
+   legs are clustered — agreement between legs is the signal,
+   a single retracement line is not.
+   ============================================================ */
+const FIB_R = [.236,.382,.5,.618,.786,.886];
+function fibLevels(pv, bars){
+  if(pv.length<2) return {legs:[], clusters:[]};
+  const legs=[];
+  for(let i=Math.max(0,pv.length-7); i<pv.length-1; i++){
+    const a=pv[i], b=pv[i+1];
+    const span=b.p-a.p;
+    if(!span) continue;
+    legs.push({a,b,span, levels:FIB_R.map(r=>({r, p:b.p - span*r}))});
+  }
+  const main = legs.length ? legs.reduce((m,l)=>Math.abs(l.span)>Math.abs(m.span)?l:m) : null;
+
+  // cluster levels that land within a tolerance of each other
+  const tol = atr(bars)*0.6;
+  const all = legs.flatMap(l=>l.levels.map(x=>({...x, from:l})));
+  all.sort((a,b)=>a.p-b.p);
+  const clusters=[]; let cur=[];
+  for(const lv of all){
+    if(!cur.length || Math.abs(lv.p - cur[cur.length-1].p) <= tol) cur.push(lv);
+    else { if(cur.length>=2) clusters.push(cur); cur=[lv]; }
+  }
+  if(cur.length>=2) clusters.push(cur);
+  return {legs, main, clusters: clusters.map(c=>({
+    lo:Math.min(...c.map(x=>x.p)), hi:Math.max(...c.map(x=>x.p)),
+    mid:c.reduce((s,x)=>s+x.p,0)/c.length, n:c.length,
+    ratios:[...new Set(c.map(x=>x.r))].sort((a,b)=>a-b)
+  })).sort((a,b)=>b.n-a.n).slice(0,4)};
+}
+
+/* ============================================================
+   PLANS
+   Every level below is read off something the engine actually
+   detected. Nothing is a constant. If a school has no read on
+   the current chart it proposes nothing rather than inventing
+   a trade.
+   ============================================================ */
+function buildPlans(bars, pv, tr, harm, fb){
+  const a = atr(bars), px = bars.length ? bars[bars.length-1].c : 0;
+  const P = {structure:null, harmonic:null, fib:null};
+  if(!bars.length || pv.length < 3) return P;
+
+  const highs = pv.filter(p=>p.kind==='H'), lows = pv.filter(p=>p.kind==='L');
+  const lastH = highs[highs.length-1], lastL = lows[lows.length-1];
+  const prevH = highs[highs.length-2], prevL = lows[lows.length-2];
+
+  /* structure — trade with the trend, back to the last swing */
+  if(tr.name==='up' && lastL && lastH){
+    P.structure = {dir:'long', entry:lastL.p, stop:lastL.p - a*0.6, tp1:lastH.p,
+      why:`Uptrend. Buy the retest of the last higher low at ${fmt(lastL.p)}, target the prior high.`};
+  } else if(tr.name==='down' && lastH && lastL){
+    P.structure = {dir:'short', entry:lastH.p, stop:lastH.p + a*0.6, tp1:lastL.p,
+      why:`Downtrend. Sell the retest of the last lower high at ${fmt(lastH.p)}, target the prior low.`};
+  }
+
+  /* harmonic — prefer a forming pattern, else a complete D near price */
+  const forming = harm.find(h=>!h.complete);
+  const complete = harm.filter(h=>h.complete)
+    .sort((x,y)=>Math.abs(x.D.p-px)-Math.abs(y.D.p-px))[0];
+  const h = forming || (complete && Math.abs(complete.D.p-px) < a*4 ? complete : null);
+  if(h){
+    const entry = h.complete ? h.D.p : h.D;
+    const long = h.dir==='long';
+    const beyondX = long ? h.X.p - a*0.5 : h.X.p + a*0.5;
+    P.harmonic = {dir:h.dir, entry, stop:beyondX, tp1:h.B.p,
+      why:`${h.name} ${h.complete?'complete':'forming'}, score ${(h.score*100).toFixed(0)}%. Entry at D, stop beyond X, first target back at B.`};
+  }
+
+  /* fib — the strongest cluster on the right side of price */
+  if(fb.clusters && fb.clusters.length){
+    const below = fb.clusters.filter(c=>c.mid < px).sort((x,y)=>y.n-x.n || y.mid-x.mid)[0];
+    const above = fb.clusters.filter(c=>c.mid > px).sort((x,y)=>y.n-x.n || x.mid-y.mid)[0];
+    const pick = tr.name==='down' ? (above||below) : (below||above);
+    if(pick){
+      const long = pick.mid < px;
+      const nextTarget = long
+        ? (fb.clusters.filter(c=>c.mid > pick.mid).sort((x,y)=>x.mid-y.mid)[0]?.mid ?? (lastH?lastH.p:px+a*3))
+        : (fb.clusters.filter(c=>c.mid < pick.mid).sort((x,y)=>y.mid-x.mid)[0]?.mid ?? (lastL?lastL.p:px-a*3));
+      P.fib = {dir: long?'long':'short',
+        entry: pick.mid,
+        stop: long ? pick.lo - a*0.7 : pick.hi + a*0.7,
+        tp1: nextTarget,
+        why:`${pick.n} fib levels stack at ${fmt(pick.mid)} (${pick.ratios.join('/')}). Trade the cluster, stop beyond its edge.`};
+    }
+  }
+
+  // discard anything with no room between entry and stop, or a target on the wrong side
+  for(const k in P){
+    const p=P[k]; if(!p) continue;
+    const long = p.dir==='long';
+    const bad = !isFinite(p.entry) || !isFinite(p.stop) || !isFinite(p.tp1)
+      || Math.abs(p.entry-p.stop) < a*0.15
+      || (long ? p.tp1 <= p.entry : p.tp1 >= p.entry)
+      || (long ? p.stop >= p.entry : p.stop <= p.entry);
+    if(bad) P[k]=null;
+  }
+  return P;
+}
+
+const median = arr => { const b=[...arr].sort((x,y)=>x-y), m=b.length>>1;
+  return b.length%2 ? b[m] : (b[m-1]+b[m])/2; };
+
+/* Schools only get merged when they are describing the SAME trade.
+   Two shorts 8% apart are two setups, not one — averaging them
+   produces an entry nobody proposed and a target on the wrong
+   side of it. So: group by entry proximity, trade the strongest
+   group, and report the rest as alternates. */
+function deriveSignal(P, tr, a, px){
+  const on = Object.entries(P).filter(([k,v])=>v && schools[k]).map(([k,v])=>({id:k, ...v}));
+  if(!on.length) return {kind:'none'};
+  const L = on.filter(p=>p.dir==='long'), S = on.filter(p=>p.dir==='short');
+  if(L.length === S.length) return {kind:'split', L, S};
+
+  const win = L.length > S.length ? L : S;
+  const long = win[0].dir === 'long';
+  const dissent = long ? S : L;
+
+  const tol = Math.max(a*1.2, Math.abs(px)*0.0015);
+  const sorted = [...win].sort((x,y)=>x.entry-y.entry);
+  const groups=[]; let cur=[sorted[0]];
+  for(let i=1;i<sorted.length;i++){
+    if(Math.abs(sorted[i].entry - cur[cur.length-1].entry) <= tol) cur.push(sorted[i]);
+    else { groups.push(cur); cur=[sorted[i]]; }
+  }
+  groups.push(cur);
+  groups.sort((g,h)=> h.length-g.length
+    || Math.abs(g[0].entry-px)-Math.abs(h[0].entry-px));
+
+  const grp = groups[0];
+  const rrOf = p => Math.abs(p.tp1-p.entry)/Math.abs(p.entry-p.stop);
+
+  let entry = median(grp.map(p=>p.entry));
+  let stop  = long ? Math.min(...grp.map(p=>p.stop)) : Math.max(...grp.map(p=>p.stop));
+  let tp1   = long ? Math.min(...grp.map(p=>p.tp1))  : Math.max(...grp.map(p=>p.tp1));
+  let sources = grp, merged = grp.length>1, fellBack = false;
+
+  // if the merge produced nonsense, fall back to the single best plan in the group
+  const okSide = long ? (stop < entry && tp1 > entry) : (stop > entry && tp1 < entry);
+  const rr = Math.abs(tp1-entry)/Math.abs(entry-stop);
+  if(!okSide || !isFinite(rr) || rr < 0.5){
+    const best = [...grp].sort((x,y)=>rrOf(y)-rrOf(x))[0];
+    ({entry, stop, tp1} = best);
+    sources=[best]; merged=false; fellBack=true;
+  }
+
+  return {kind:'plan', dir:win[0].dir, entry, stop, tp1,
+    sources, merged, fellBack, dissent,
+    alternates: groups.slice(1).map(g=>({ids:g.map(p=>p.id), entry:median(g.map(p=>p.entry))})),
+    single: on.length===1,
+    inval: long ? tr.refL : tr.refH};
+}
+
+/* ============================================================
+   SIGNAL LOG
+   Written the moment a signal is emitted, before the outcome is
+   known. That is the whole point: a level recorded after the
+   candle prints proves nothing. Persisted where possible, kept
+   in memory where not, exportable either way.
+   ============================================================ */
+const KEY = 'prism.log.v1';
+const store = (()=>{
+  let mem = [];
+  let ok = false;
+  try{ localStorage.setItem('prism.probe','1'); localStorage.removeItem('prism.probe'); ok = true; }catch(e){ ok = false; }
+  return {
+    persistent: ok,
+    read(){
+      if(!ok) return mem;
+      try{ return JSON.parse(localStorage.getItem(KEY) || '[]'); }catch(e){ return []; }
+    },
+    write(rows){
+      mem = rows;
+      if(!ok) return;
+      try{ localStorage.setItem(KEY, JSON.stringify(rows)); }catch(e){ /* quota or blocked */ }
+    }
+  };
+})();
+
+let log = store.read();
+
+function signalFingerprint(sig){
+  // one entry per distinct plan, not one per tick
+  return [SYM, TFK, sig.dir, Math.round(sig.entry), Math.round(sig.stop), Math.round(sig.tp1)].join('|');
+}
+
+function logSignal(sig, cal){
+  const fp = signalFingerprint(sig);
+  if(log.some(r=>r.fp===fp && r.state==='open')) return false;
+  log.unshift({
+    fp, ts:Date.now(), sym:SYM, tf:TFK, dir:sig.dir,
+    entry:sig.entry, stop:sig.stop, tp1:sig.tp1,
+    inval: sig.inval ?? null,
+    sources: sig.sources.map(s=>s.id),
+    stability: cal && cal.stability!=null ? +(cal.stability).toFixed(2) : null,
+    state:'open', outcome:null, r:null
+  });
+  log = log.slice(0,200);
+  store.write(log);
+  return true;
+}
+
+/* Resolve open entries against price that has printed since. */
+function resolveLog(bars){
+  if(!bars.length) return;
+  let changed=false;
+  for(const r of log){
+    if(r.state!=='open' || r.sym!==SYM || r.tf!==TFK) continue;
+    const after = bars.filter(b=>b.t > r.ts - 1);
+    if(!after.length) continue;
+    const long = r.dir==='long';
+    let filled=false;
+    for(const b of after){
+      if(!filled && (long ? b.l <= r.entry : b.h >= r.entry)) filled = true;
+      if(filled){
+        if(long ? b.l <= r.stop : b.h >= r.stop){
+          r.state='closed'; r.outcome='stopped'; r.r = -1; changed=true; break;
+        }
+        if(long ? b.h >= r.tp1 : b.l <= r.tp1){
+          r.state='closed'; r.outcome='tp1';
+          r.r = Math.abs(r.tp1-r.entry)/Math.abs(r.entry-r.stop); changed=true; break;
+        }
+      }
+      if(!filled && r.inval!=null && (long ? b.h >= r.inval : b.l <= r.inval)){
+        r.state='closed'; r.outcome='invalidated before fill'; r.r = 0; changed=true; break;
+      }
+    }
+    if(!filled && r.state==='open') r.pending = true;
+  }
+  if(changed) store.write(log);
+}
+
+function logStats(){
+  const closed = log.filter(r=>r.state==='closed' && r.r!=null);
+  const traded = closed.filter(r=>r.outcome!=='invalidated before fill');
+  const wins = traded.filter(r=>r.r>0).length;
+  const exp = closed.length ? closed.reduce((s,r)=>s+r.r,0)/closed.length : 0;
+  const expTraded = traded.length ? traded.reduce((s,r)=>s+r.r,0)/traded.length : 0;
+  return {n:log.length, closed:closed.length, traded:traded.length, wins,
+    exp, expTraded, open:log.filter(r=>r.state==='open').length,
+    voided: closed.length - traded.length};
+}
+
+/* ============================================================
+   AUTO-CALIBRATION
+   There is no universally right pivot setting — that is why
+   every zigzag ships a parameter. So instead of asking, the
+   engine searches: it wants a swing count that suits the bar
+   count, no micro-swings, and a result that does not flip when
+   the setting nudges. Stability is the real prize: a pivot set
+   that changes every time you breathe on it is worthless.
+   ============================================================ */
+function calibrate(bars){
+  if(bars.length < 40) return {strength:3, atrMult:1.0, why:'Not enough bars to calibrate — using defaults.'};
+
+  const target = Math.max(6, Math.min(24, Math.round(bars.length/18)));
+  const a = atr(bars);
+  const cands=[];
+
+  for(let st=2; st<=12; st++){
+    for(let m=0; m<=40; m+=5){
+      const mult = m/10;
+      const pv = findPivots(bars, st, mult);
+      if(pv.length < 4) continue;
+
+      // how far off the swing-count target
+      const density = Math.abs(pv.length - target)/target;
+
+      // micro-swings: legs worth less than half an ATR are noise
+      const legs=[]; for(let i=1;i<pv.length;i++) legs.push(Math.abs(pv[i].p-pv[i-1].p));
+      const micro = legs.filter(l=>l < a*0.5).length/legs.length;
+
+      // evenness — wildly uneven legs usually mean the filter is fighting the data
+      const mean = legs.reduce((s,x)=>s+x,0)/legs.length;
+      const cv = Math.sqrt(legs.reduce((s,x)=>s+(x-mean)**2,0)/legs.length)/(mean||1);
+
+      cands.push({strength:st, atrMult:mult, n:pv.length,
+        cost: density*1.8 + micro*1.2 + Math.min(cv,3)*0.25});
+    }
+  }
+  if(!cands.length) return {strength:3, atrMult:1.0, why:'No setting produced enough pivots — using defaults.'};
+
+  cands.sort((x,y)=>x.cost-y.cost);
+  const best = cands[0];
+
+  // stability: do the neighbours agree with the winner?
+  const near = cands.filter(c=>Math.abs(c.strength-best.strength)<=1 && Math.abs(c.atrMult-best.atrMult)<=0.5);
+  const agree = near.filter(c=>Math.abs(c.n-best.n) <= Math.max(1, best.n*0.2)).length;
+  const stability = near.length ? agree/near.length : 0;
+
+  return {
+    strength:best.strength, atrMult:best.atrMult, n:best.n, stability,
+    why:`Picked strength ${best.strength} and a ${best.atrMult.toFixed(1)}× ATR filter — ${best.n} swings across ${bars.length} bars. `
+      + (stability>=0.7
+        ? `Nearby settings give the same count, so this reading is stable.`
+        : `Nearby settings disagree (${(stability*100).toFixed(0)}% agreement), so treat these swings as one reading rather than the reading.`)
+  };
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let W=0,H=0, PAD={t:22,r:80,b:26,l:12}, LO=0, HI=1;
+const show = {pivots:true, labels:true, events:true, zig:false, fib:true, harm:true};
+let harmonics=[], fibs={clusters:[]};
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = n => n>=1000 ? n.toLocaleString(undefined,{maximumFractionDigits:1})
+                         : n.toLocaleString(undefined,{maximumFractionDigits:5});
+
+const X = i => PAD.l + (i+0.5)*((W-PAD.l-PAD.r)/Math.max(1,candles.length));
+const Y = p => PAD.t + (HI-p)*((H-PAD.t-PAD.b)/Math.max(1e-9,(HI-LO)));
+
+function resize(){
+  const r = cv.parentElement.getBoundingClientRect();
+  const dpr = Math.min(devicePixelRatio||1, 2);
+  W=r.width; H=r.height;
+  cv.width=W*dpr; cv.height=H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  draw();
+}
+function txt(s,x,y,{col=cssv('--ink2'),size=9,align='left',weight=400,font='mono'}={}){
+  ctx.fillStyle=col; ctx.textAlign=align; ctx.textBaseline='middle';
+  ctx.font=`${weight} ${size}px ${font==='disp'?"'Chakra Petch',sans-serif":"'JetBrains Mono',monospace"}`;
+  ctx.fillText(s,x,y);
+}
+function line(x1,y1,x2,y2,col,w=1,dash=null){
+  ctx.save(); ctx.strokeStyle=col; ctx.lineWidth=w; if(dash)ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.restore();
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  if(!candles.length) return;
+
+  const his=candles.map(c=>c.h), los=candles.map(c=>c.l);
+  const hi=Math.max(...his), lo=Math.min(...los), pad=(hi-lo)*0.06 || 1;
+  HI=hi+pad; LO=lo-pad;
+
+  // grid
+  const step = niceStep((HI-LO)/6);
+  for(let p=Math.ceil(LO/step)*step; p<=HI; p+=step){
+    const y=Y(p);
+    line(PAD.l,y,W-PAD.r,y,cssv('--grid'),1);
+    txt(fmt(p),W-PAD.r+8,y,{col:cssv('--axis')});
+  }
+
+  // candles
+  const w=Math.max(1.4,(W-PAD.l-PAD.r)/candles.length*0.66);
+  candles.forEach((k,i)=>{
+    const x=X(i), up=k.c>=k.o;
+    line(x,Y(k.h),x,Y(k.l),cssv(up?'--wickUp':'--wickDn'),1);
+    ctx.fillStyle=cssv(up?'--candleUp':'--candleDn');
+    const y1=Y(Math.max(k.o,k.c)), y2=Y(Math.min(k.o,k.c));
+    ctx.fillRect(x-w/2,y1,w,Math.max(1,y2-y1));
+  });
+
+  // zigzag
+  if(show.zig && pivots.length>1){
+    ctx.save(); ctx.strokeStyle=cssv('--ink2'); ctx.globalAlpha=.5; ctx.lineWidth=1;
+    ctx.beginPath();
+    pivots.forEach((p,i)=>{ const x=X(p.i), y=Y(p.p); i?ctx.lineTo(x,y):ctx.moveTo(x,y) });
+    ctx.stroke(); ctx.restore();
+  }
+
+  // structure events
+  if(show.events){
+    events.forEach(e=>{
+      const c = e.type==='BOS' ? cssv('--bos') : cssv('--choch');
+      const i = candles.findIndex(k=>k.t===e.t);
+      if(i<0) return;
+      line(X(i),Y(e.p),W-PAD.r,Y(e.p),c,1,[5,4]);
+      txt(e.type,X(i)+5,Y(e.p)-8,{col:c,size:8.5,weight:500});
+    });
+  }
+
+  // pivots + labels
+  pivots.forEach(p=>{
+    const x=X(p.i), y=Y(p.p), up=p.kind==='H';
+    if(show.pivots){
+      ctx.fillStyle=cssv('--pivot');
+      ctx.beginPath(); ctx.arc(x,y,2.4,0,Math.PI*2); ctx.fill();
+    }
+    if(show.labels && p.label){
+      const bull = p.label==='HH'||p.label==='HL';
+      txt(p.label, x, y+(up?-13:13),
+        {col: bull?cssv('--long'):cssv('--short'), size:8.5, align:'center', weight:500});
+    }
+  });
+
+  // fib clusters
+  if(show.fib && fibs.clusters){
+    fibs.clusters.forEach(c=>{
+      const y1=Y(c.hi), y2=Y(c.lo), col=cssv('--fib');
+      ctx.save(); ctx.globalAlpha=.06+Math.min(.14,c.n*.03); ctx.fillStyle=col;
+      ctx.fillRect(PAD.l,y1,W-PAD.l-PAD.r,Math.max(1.5,y2-y1)); ctx.restore();
+      line(PAD.l,Y(c.mid),W-PAD.r,Y(c.mid),col,1,[2,4]);
+      txt(`${c.n}× fib · ${c.ratios.join('/')}`,PAD.l+5,Y(c.mid)-8,{col,size:8.5});
+    });
+  }
+
+  // harmonics
+  if(show.harm){
+    harmonics.forEach((h,hi)=>{
+      const pts = h.complete ? [h.X,h.A,h.B,h.C,h.D] : [h.X,h.A,h.B,h.C];
+      const col = cssv('--harmonic');
+      ctx.save(); ctx.strokeStyle=col; ctx.lineWidth=hi?1:1.5; ctx.globalAlpha=hi?.4:1;
+      ctx.beginPath();
+      pts.forEach((p,i)=>{ const x=X(p.i),y=Y(p.p); i?ctx.lineTo(x,y):ctx.moveTo(x,y) });
+      ctx.stroke();
+      if(!h.complete){
+        ctx.setLineDash([4,4]);
+        const c4=pts[3], xEnd=X(candles.length-1);
+        ctx.beginPath(); ctx.moveTo(X(c4.i),Y(c4.p)); ctx.lineTo(xEnd,Y(h.D)); ctx.stroke();
+      }
+      ctx.restore();
+      if(hi) return;
+      'XABCD'.split('').forEach((lab,k)=>{
+        const p=pts[k]; if(!p) return;
+        const x=X(p.i), y=Y(p.p);
+        ctx.fillStyle=cssv('--bg'); ctx.fillRect(x-7,y-7,14,14);
+        ctx.strokeStyle=col; ctx.lineWidth=1; ctx.strokeRect(x-7,y-7,14,14);
+        txt(lab,x,y+.5,{col,size:9,align:'center',weight:600,font:'disp'});
+      });
+      if(!h.complete){
+        const yLo=Y(h.przHi), yHi=Y(h.przLo);
+        ctx.save(); ctx.globalAlpha=.12; ctx.fillStyle=col;
+        ctx.fillRect(X(candles.length-1)-40,yLo,40+PAD.r-6,Math.max(2,yHi-yLo)); ctx.restore();
+        txt(`${h.name} PRZ ${fmt(h.D)}`,W-PAD.r-6,Y(h.D)-10,{col,size:8.5,align:'right',weight:500});
+      }
+    });
+  }
+
+  // last price
+  const last=candles[candles.length-1], yl=Y(last.c);
+  line(PAD.l,yl,W-PAD.r,yl,cssv('--axis'),1,[2,3]);
+  ctx.fillStyle=cssv('--ink'); ctx.fillRect(W-PAD.r+2,yl-8,70,16);
+  txt(fmt(last.c),W-PAD.r+6,yl,{col:cssv('--bg'),size:9.5,weight:600});
+
+  // time axis
+  const every=Math.ceil(candles.length/7);
+  candles.forEach((k,i)=>{
+    if(i%every) return;
+    const d=new Date(k.t);
+    txt(`${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2,'0')}:00`,
+      X(i),H-PAD.b/2,{col:cssv('--axis'),size:8.5,align:'center'});
+  });
+}
+function niceStep(x){
+  const p=Math.pow(10,Math.floor(Math.log10(x)));
+  const n=x/p;
+  return (n<1.5?1:n<3?2:n<7?5:10)*p;
+}
+
+cv.addEventListener('mousemove', e=>{
+  if(!candles.length) return;
+  const r=cv.getBoundingClientRect(), mx=e.clientX-r.left;
+  const i=Math.round((mx-PAD.l)/((W-PAD.l-PAD.r)/candles.length)-0.5);
+  const k=candles[Math.max(0,Math.min(candles.length-1,i))];
+  document.getElementById('readout').innerHTML =
+    `<span>O <b>${fmt(k.o)}</b></span><span>H <b>${fmt(k.h)}</b></span>
+     <span>L <b>${fmt(k.l)}</b></span><span>C <b>${fmt(k.c)}</b></span>
+     <span>venues <b>${k.n}</b></span>`;
+});
+cv.addEventListener('mouseleave', ()=>document.getElementById('readout').innerHTML='');
+
+/* ============================================================
+   PANELS
+   ============================================================ */
+function recompute(){
+  if(autoMode){
+    cal = calibrate(candles);
+    document.getElementById('strength').value = cal.strength;
+    document.getElementById('atrMult').value = Math.round(cal.atrMult*10);
+    document.getElementById('vStrength').textContent = cal.strength;
+    document.getElementById('vAtr').textContent = cal.atrMult ? cal.atrMult.toFixed(1)+'× ATR' : 'off';
+  }
+  document.getElementById('autoWhy').innerHTML = autoMode
+    ? (cal ? cal.why : 'Calibrating…')
+    : 'Manual settings. The engine is not calibrating for you.';
+  const strength = +document.getElementById('strength').value;
+  const mult = +document.getElementById('atrMult').value/10;
+  pivots = labelSwings(findPivots(candles, strength, mult));
+  const res = readStructure(candles, pivots);
+  trend = res.trend; events = res.events;
+  harmonics = scanHarmonics(pivots, +document.getElementById('minScore').value/100);
+  fibs = fibLevels(pivots, candles);
+  plans = buildPlans(candles, pivots, trend, harmonics, fibs);
+  signal = deriveSignal(plans, trend, atr(candles), candles.length?candles[candles.length-1].c:0);
+  resolveLog(candles);
+  renderPanels();
+  draw();
+}
+
+const F = id=>+document.getElementById(id).value;
+
+function renderRisk(sig){
+  const acct=F('acct'), rp=F('risk')/100, lev=Math.max(1,F('lev')), bp=F('taker')/10000;
+  const dist=Math.abs(sig.entry-sig.stop);
+  if(!dist){ document.getElementById('riskOut').innerHTML='<div class="row"><span>Entry equals stop</span><b>—</b></div>'; return; }
+  const riskUsd=acct*rp, qty=riskUsd/dist, notional=qty*sig.entry, margin=notional/lev;
+  const fees=notional*bp*2;
+  const rrNet=(Math.abs(sig.tp1-sig.entry)*qty-fees)/riskUsd;
+  const MMR=0.005, long=sig.dir==='long';
+  const liq= long ? sig.entry*(1-1/lev+MMR) : sig.entry*(1+1/lev-MMR);
+  const beyond = long ? sig.stop<=liq : sig.stop>=liq;
+
+  document.getElementById('riskOut').innerHTML=`
+    <div class="row hi"><span>Size</span><b>${qty.toFixed(6)}</b></div>
+    <div class="row"><span>Notional</span><b>$${notional.toFixed(2)}</b></div>
+    <div class="row"><span>Margin at ${lev}×</span><b>$${margin.toFixed(2)}</b></div>
+    <div class="row"><span>Risked</span><b>$${riskUsd.toFixed(2)} · ${(dist/sig.entry*100).toFixed(2)}%</b></div>
+    <div class="row"><span>R:R after fees</span><b style="color:${rrNet<1?'var(--short)':'var(--ink)'}">1:${rrNet.toFixed(2)}</b></div>
+    <div class="row"><span>Liquidation</span><b style="color:${beyond?'var(--short)':'var(--ink)'}">${fmt(liq)}</b></div>`;
+
+  const al=document.getElementById('alarm');
+  if(beyond){
+    al.className='alarm on';
+    al.innerHTML=`<b>Stop sits past liquidation.</b> At ${lev}× you liquidate at ${fmt(liq)} before the stop at ${fmt(sig.stop)} can fill. Drop to ${Math.max(1,Math.floor(1/(dist/sig.entry+MMR)))}× or below.`;
+  } else {
+    al.className='alarm safe';
+    al.innerHTML=`Stop clears liquidation by ${(Math.abs(liq-sig.stop)/sig.entry*100).toFixed(2)}% of price. Size comes from the stop distance; leverage only changes margin posted.`;
+  }
+}
+
+function renderPanels(){
+  renderSignal();
+  const t=document.getElementById('trendName');
+  t.textContent = trend.name==='up'?'UPTREND':trend.name==='down'?'DOWNTREND':'RANGE';
+  t.className = 'tname ' + (trend.name==='up'?'up':trend.name==='down'?'dn':'rg');
+  document.getElementById('trendNote').textContent = trend.note;
+
+  document.getElementById('events').innerHTML = events.length
+    ? events.map(e=>`<tr><td><span class="ev ${e.type}">${e.type}</span></td>
+        <td>${e.to}</td><td>${fmt(e.p)}</td></tr>`).join('')
+    : `<tr><td colspan="3" style="color:var(--dim)">No breaks yet at this filter setting.</td></tr>`;
+
+  const recent=[...pivots].reverse().slice(0,12);
+  document.getElementById('swings').innerHTML = recent.length
+    ? recent.map(p=>{
+        const d=new Date(p.t);
+        return `<tr><td><span class="lab ${p.label}">${p.label}</span></td>
+          <td>${fmt(p.p)}</td><td style="color:var(--dim)">${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2,'0')}:00</td></tr>`;
+      }).join('')
+    : `<tr><td colspan="3" style="color:var(--dim)">No pivots. Lower the strength or the noise filter.</td></tr>`;
+
+  document.getElementById('patterns').innerHTML = harmonics.length
+    ? harmonics.map(h=>`<div class="pat ${h.complete?'':'forming'}">
+        <span class="pn">${h.name}</span>
+        <span class="pd ${h.dir}">${h.dir.toUpperCase()}</span>
+        <span class="ps">${(h.score*100).toFixed(0)}%</span>
+        <span class="pi">${h.complete
+          ? `complete at D ${fmt(h.D.p)} · AD/XA ${h.ratios.AD.toFixed(3)}`
+          : `forming · PRZ ${fmt(h.przLo)}–${fmt(h.przHi)}`}</span>
+      </div>`).join('')
+    : `<p class="hint">No pattern clears ${document.getElementById('minScore').value}%. Lower the score, or the pivots are too coarse.</p>`;
+
+  renderSignal(); renderLog();
+
+  const live=Object.values(VENUES).filter(v=>v.on && v.state==='live');
+  const counts=candles.map(c=>c.n);
+  const full=counts.filter(n=>n===live.length).length;
+  document.getElementById('aggNote').innerHTML = live.length
+    ? `${live.length} venue${live.length>1?'s':''} streaming. ${full} of ${candles.length} bars carry every venue; the rest were built from fewer. Open, close and volume are volume-weighted; high and low are the extremes across venues.`
+    : 'No venue is streaming. Bars shown are whatever loaded from history.';
+
+  if(candles.length){
+    const last=candles[candles.length-1], first=candles[0];
+    document.getElementById('lastPx').textContent = fmt(last.c);
+    const ch=(last.c-first.o)/first.o*100;
+    const el=document.getElementById('lastChg');
+    el.textContent = `${ch>=0?'+':''}${ch.toFixed(2)}%`;
+    el.className = 'chg ' + (ch>=0?'up':'dn');
+  }
+}
+
+function renderSignal(){
+  const el=document.getElementById('signal'), px=candles.length?candles[candles.length-1].c:0;
+  const S=signal;
+  if(S.kind==='none'){
+    el.innerHTML=`<div class="signame none">NO SETUP</div>
+      <p class="sigwhy">${Object.values(schools).some(Boolean)
+        ? 'None of the voting schools has a read on this chart right now. That is a result, not a gap.'
+        : 'Every voting school is switched off.'}</p>`;
+    return;
+  }
+  if(S.kind==='split'){
+    el.innerHTML=`<div class="signame none">NO SIGNAL <span class="badge">SPLIT</span></div>
+      <p class="sigwhy">${S.L.length} long / ${S.S.length} short with no majority. Two valid trades in opposite directions is not a signal.</p>`;
+    return;
+  }
+  const long=S.dir==='long', risk=Math.abs(S.entry-S.stop);
+  const rr=risk?Math.abs(S.tp1-S.entry)/risk:0;
+  const dist=(S.entry-px)/px*100;
+  const acct=+document.getElementById('acct').value||0, rp=(+document.getElementById('riskPct').value||0)/100;
+  const qty=risk?acct*rp/risk:0;
+
+  let st,why;
+  if(S.inval!=null && (long ? px>=S.inval : px<=S.inval)){
+    st='invalidated'; why=`Price is through ${fmt(S.inval)} — the structure this plan sits on has broken.`;
+  } else if(long ? px<=S.stop : px>=S.stop){ st='stopped'; why='Price is already beyond the stop.'; }
+  else if(long ? px<=S.entry : px>=S.entry){ st='triggered'; why='Price is in the entry zone.'; }
+  else if(Math.abs(px-S.entry)<=Math.abs(S.entry)*0.004){ st='armed'; why='Within 0.4% of entry.'; }
+  else { st='waiting'; why=`Price is ${Math.abs(dist).toFixed(2)}% ${dist<0?'above':'below'} entry.`; }
+
+  el.innerHTML=`
+    <div class="signame ${long?'long':'short'}">${long?'LONG':'SHORT'} ${SYM}
+      <span class="badge ${st}">${st.toUpperCase()}</span></div>
+    <p class="sigwhy">${why}</p>
+    <div class="siggrid">
+      <div><label>Entry</label><b>${fmt(S.entry)}</b></div>
+      <div><label>Stop</label><b class="s">${fmt(S.stop)}</b></div>
+      <div><label>Target</label><b>${fmt(S.tp1)} <em>1:${rr.toFixed(2)}</em></b></div>
+      <div><label>Size</label><b>${qty>0?qty.toFixed(5):'—'}</b></div>
+    </div>
+    <p class="sigsrc">${S.merged
+      ? `${S.sources.length} schools agree on the same trade (${S.sources.map(p=>p.id).join(', ')}). Median entry, furthest stop, nearest target.`
+      : S.fellBack
+      ? `Schools agreed on direction but their levels did not combine into a coherent trade, so this is ${S.sources[0].id} alone. ${S.sources[0].why}`
+      : `${S.sources[0].why}`}
+      ${S.alternates && S.alternates.length ? `<span class="alt">Also on the board: ${S.alternates.map(g=>`${g.ids.join('+')} at ${fmt(g.entry)}`).join('; ')} — separate setup${S.alternates.length>1?'s':''}, not merged.</span>`:''}
+      ${S.dissent.length?`<span class="dis">${S.dissent.map(p=>p.id).join(', ')} disagree${S.dissent.length>1?'':'s'}.</span>`:''}
+      ${S.inval!=null?`<span class="inv">Invalidation ${fmt(S.inval)} — locked when logged.</span>`:''}
+      ${cal&&cal.stability!=null&&cal.stability<0.7?`<span class="dis">Pivot stability ${(cal.stability*100).toFixed(0)}% — these levels move if the calibration nudges.</span>`:''}
+    </p>
+    <button class="logbtn" id="logBtn">Log this signal</button>`;
+
+  const b=document.getElementById('logBtn');
+  if(b) b.onclick=()=>{
+    const added=logSignal(S, cal);
+    b.textContent = added ? 'Logged' : 'Already logged';
+    b.disabled = true;
+    renderLog();
+  };
+}
+
+function renderLog(){
+  const s=logStats();
+  document.getElementById('logStats').innerHTML=`
+    <div class="row"><span>Logged</span><b>${s.n} · ${s.open} open</b></div>
+    <div class="row"><span>Filled &amp; resolved</span><b>${s.traded?`${s.wins}/${s.traded} · ${(s.wins/s.traded*100).toFixed(0)}%`:'—'}</b></div>
+    <div class="row"><span>Expectancy, filled only</span><b>${s.traded?(s.expTraded>0?'+':'')+s.expTraded.toFixed(2)+'R':'—'}</b></div>
+    <div class="row"><span>Expectancy, all logged</span><b style="color:${s.exp<s.expTraded?'var(--warn)':'var(--ink)'}">${s.closed?(s.exp>0?'+':'')+s.exp.toFixed(2)+'R':'—'}</b></div>`;
+
+  document.getElementById('logRows').innerHTML = log.slice(0,8).map(r=>{
+    const d=new Date(r.ts);
+    return `<div class="lg ${r.state}">
+      <span class="lgs">${r.sym} ${r.tf}</span>
+      <span class="lgd ${r.dir}">${r.dir}</span>
+      <span class="lgr ${r.r>0?'pos':r.r<0?'neg':'na'}">${r.r==null?'open':(r.r>0?'+':'')+r.r.toFixed(2)+'R'}</span>
+      <span class="lgi">${fmt(r.entry)} → ${fmt(r.tp1)} · stop ${fmt(r.stop)} · ${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}${r.outcome?` · ${r.outcome}`:''}</span>
+    </div>`;
+  }).join('') || '<p class="hint">Nothing logged yet.</p>';
+
+  document.getElementById('logNote').innerHTML = store.persistent
+    ? `Saved in this browser only — never sent anywhere. ${s.voided} logged plan${s.voided===1?'':'s'} died before filling; those count as 0R in the all-logged number, which is why it sits below the filled-only one.`
+    : `<b>Storage is blocked here, so the log is memory-only and dies with this tab.</b> Export it if you want to keep it.`;
+}
+
+function renderVenues(){
+  document.getElementById('venues').innerHTML = Object.entries(VENUES).map(([k,v])=>`
+    <label class="ven ${v.on?v.state:'off'}" title="${v.note||''}">
+      <input type="checkbox" data-v="${k}" ${v.on?'checked':''}>
+      <i></i>${v.name}${v.state==='fail'?' ✕':''}
+    </label>`).join('');
+  document.querySelectorAll('.ven input').forEach(cb=>cb.onchange=()=>{
+    VENUES[cb.dataset.v].on = cb.checked;
+    if(!cb.checked) disconnect(VENUES[cb.dataset.v]);
+    renderVenues(); rebuild(); if(cb.checked) connect(VENUES[cb.dataset.v]);
+  });
+}
+
+function setStatus(msg, hide=false){
+  const box=document.getElementById('statusBox');
+  box.classList.toggle('hide', hide);
+  if(msg) document.getElementById('statusMsg').innerHTML = msg;
+}
+
+/* ============================================================
+   CONNECTION
+   ============================================================ */
+function rebuild(){
+  candles = aggregate();
+  if(candles.length) setStatus('', true);
+  recompute();
+}
+
+function disconnect(V){
+  if(V.ws){ try{ V.ws.close(); }catch(e){} V.ws=null; }
+  V.bars.clear(); V.state='idle';
+}
+
+async function connect(V){
+  if(!V.on) return;
+  V.state='wait'; renderVenues();
+  try{
+    const rows = await V.history(SYM, TFK);
+    rows.forEach(b=>V.bars.set(b.t,b));
+    V.state='live'; V.note='';
+    rebuild(); renderVenues();
+  }catch(err){
+    V.state='fail';
+    V.note = `${V.name} history failed: ${err.message}. Often geo-blocking or a browser CORS block — untick it and the others carry on.`;
+    renderVenues(); renderPanels();
+    if(!Object.values(VENUES).some(v=>v.on && v.state==='live'))
+      setStatus(`No venue responded.<br>${V.note}`);
+    return;
+  }
+  try{
+    V.ws = V.socket(SYM, TFK, bar=>{
+      V.bars.set(bar.t, bar);
+      if(V.bars.size > HISTORY+50){
+        const oldest=[...V.bars.keys()].sort((a,b)=>a-b)[0];
+        V.bars.delete(oldest);
+      }
+      scheduleRebuild();
+    });
+    V.ws.onerror = ()=>{ V.state='fail'; V.note=`${V.name} socket dropped. History still loaded.`; renderVenues(); };
+    V.ws.onclose = ()=>{ if(V.state==='live'){ V.state='wait'; renderVenues(); setTimeout(()=>{ if(V.on) connect(V); }, 4000); } };
+  }catch(err){
+    V.note = `${V.name} socket failed: ${err.message}`;
+    renderVenues();
+  }
+}
+
+let pending=null;
+function scheduleRebuild(){
+  if(pending) return;
+  pending = requestAnimationFrame(()=>{ pending=null; rebuild(); });
+}
+
+function reload(){
+  Object.values(VENUES).forEach(disconnect);
+  candles=[]; pivots=[]; events=[];
+  setStatus('Loading history…');
+  renderVenues(); draw();
+  Object.values(VENUES).forEach(connect);
+}
+
+/* ---------- controls ---------- */
+document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tf').forEach(x=>x.removeAttribute('aria-pressed'));
+  b.setAttribute('aria-pressed','true');
+  TFK=b.dataset.tf; reload();
+});
+document.getElementById('sym').addEventListener('change', e=>{
+  const v=e.target.value.trim().toUpperCase();
+  if(v){ SYM=v; reload(); }
+});
+document.getElementById('strength').addEventListener('input', e=>{
+  document.getElementById('vStrength').textContent = e.target.value; recompute();
+});
+document.getElementById('minScore').addEventListener('input', e=>{
+  document.getElementById('vScore').textContent = e.target.value+'%'; recompute();
+});
+document.getElementById('atrMult').addEventListener('input', e=>{
+  const m=(+e.target.value/10).toFixed(1);
+  document.getElementById('vAtr').textContent = m==='0.0' ? 'off' : `${m}× ATR`;
+  recompute();
+});
+[['tPivots','pivots'],['tLabels','labels'],['tEvents','events'],['tZig','zig'],['tFib','fib'],['tHarm','harm']].forEach(([id,key])=>{
+  const b=document.getElementById(id);
+  b.onclick=()=>{ show[key]=!show[key]; b.setAttribute('aria-pressed',String(show[key])); draw(); };
+});
+
+document.getElementById('manualToggle').onclick = e=>{
+  autoMode = !autoMode;
+  const box=document.getElementById('manualBox');
+  box.hidden = autoMode;
+  e.target.textContent = autoMode ? 'Adjust manually' : 'Back to auto';
+  recompute();
+};
+
+document.querySelectorAll('.sch').forEach(b=>b.onclick=()=>{
+  const k=b.dataset.s; schoolOn[k]=!schoolOn[k];
+  b.setAttribute('aria-pressed',String(schoolOn[k])); renderPanels();
+});
+['acct','risk','lev','taker'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{
+  if(window.__sig && window.__sig.kind==='plan') renderRisk(window.__sig);
+}));
+document.getElementById('expLog').onclick=exportLog;
+
+document.querySelectorAll('[data-school]').forEach(b=>b.onclick=()=>{
+  const k=b.dataset.school; schools[k]=!schools[k];
+  b.setAttribute('aria-pressed',String(schools[k])); recompute();
+});
+['acct','riskPct'].forEach(id=>document.getElementById(id).addEventListener('input',renderSignal));
+document.getElementById('exportLog').onclick=()=>{
+  const blob=new Blob([JSON.stringify(log,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`prism-log-${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+addEventListener('resize', resize);
+renderVenues(); renderLog(); resize(); reload();
+</script>
+</body>
+</html>
